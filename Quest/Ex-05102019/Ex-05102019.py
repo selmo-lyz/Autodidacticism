@@ -100,14 +100,11 @@ all_cell = NamedStyle(name='all_cell')
 all_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 all_cell.font = Font(name='Calibri', size=11)
 # 儲存格邊框格式
-border_l = Border(left=Side(border_style='thin'))
-border_r = Border(right=Side(border_style='thin'))
-border_t = Border(top=Side(border_style='thin'))
-border_b = Border(bottom=Side(border_style='thin'))
-border_lt = Border(left=Side(border_style='thin'), top=Side(border_style='thin'))
-border_rt = Border(right=Side(border_style='thin'), top=Side(border_style='thin'))
-border_lb = Border(left=Side(border_style='thin'), bottom=Side(border_style='thin'))
-border_rb = Border(right=Side(border_style='thin'), bottom=Side(border_style='thin'))
+#border_l = Border(left=Side(border_style='thin'))
+#border_r = Border(right=Side(border_style='thin'))
+border_t = Border(top=Side(border_style='medium'), bottom=Side(border_style='thin'))
+border_b = Border(top=Side(border_style='thin'), bottom=Side(border_style='medium'))
+border_m = Border(bottom=Side(border_style='thin'))
 # magni: 圖片放大倍率
 magni = 1.5;
 # 各標籤於 row 的位置
@@ -132,36 +129,37 @@ for r in range(1, ws.max_row):
 # 設定格式：欄
 for c in range(66, 66 + ws.max_column + 1):
     ws.column_dimensions[chr(c)].width = 23 
+
 # 設定格式：標籤欄
 ws.column_dimensions['A'].width = 11
+
 # 設定格式：照片
 for r in range(row_pos_pic, ws.max_row,11):
     ws.row_dimensions[r].height = 160
+
 # 設定格式：住址
 for r in range(row_pos_addr, ws.max_row,11):
     ws.row_dimensions[r].height = 50
+
 # 設定格式：border
+for r in range(2, ws.max_row):
+    for c in range(1, ws.max_column + 1):
+        ws.cell(r, c).border = border_m
+
 for r in range(2, ws.max_row, 11):
-    for i in range(0, len(rows) - 1):
-        ws.cell(r + i, 1).border = border_l
-        ws.cell(r + i, ws.max_column).border = border_r
     for c in range(1, ws.max_column + 1):
         ws.cell(r, c).border = border_t
         ws.cell(r + 9, c).border = border_b
-    ws.cell(r, 1).border = border_lt
-    ws.cell(r, ws.max_column).border = border_rt
-    ws.cell(r + 9, 1).border = border_lb
-    ws.cell(r + 9, ws.max_column).border = border_rb
 
 # 插入相片
-for r in range(row_pos_pic, ws.max_row, len(rows) - num_spec_row):
+for r in range(0, ws.max_row, len(rows)):
     for c in range(2, ws.max_column + 1):
-        file_name = "./images/" + str(ws.cell(row_pos_ssn, c).value) + ".jpg"
+        file_name = "./images/" + str(ws.cell(r + row_pos_ssn, c).value) + ".jpg"
         if (isfile(file_name)):
             img = Image(file_name)
             img.width = 106 * magni # pixel
             img.height = 132.3 * magni # pixel
-            ws.add_image(img, ws.cell(r, c).coordinate)
+            ws.add_image(img, ws.cell(r + row_pos_pic, c).coordinate)
 
 # Debug
 #for c in range(2, ws.max_column + 1):
