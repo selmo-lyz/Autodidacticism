@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
      * row: 資料筆數
      * col: 資料屬性數量
      */
-    int row = 4, col = 3;
+    int row = atoi(argv[2]), col = atoi(argv[3]);
 
     /*
      * 讀取檔案資料
