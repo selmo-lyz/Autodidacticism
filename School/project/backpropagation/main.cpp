@@ -11,9 +11,10 @@ using namespace std;
 
 class Layer {
   public:
-    Layer(int unit, int input_dim = 0/*, activation = 'sigmoid'*/) {
+    Layer(int unit, int input_dim = 0, string activation = "sigmoid") {
         this->unit = unit;
         this->input_dim = input_dim;
+        this->activation = activation;
 
         if (input_dim > 0) {
             random_init_1D_vec(weight, input_dim * unit);
@@ -24,11 +25,8 @@ class Layer {
     }
 
     void run(vector<double> input) {
-        for (int i = 0; i < unit; i++) {
-            output[i] = 0 - bias[i];
-            for (int j = 0; j < input_dim; j++)
-                output[i] += weight[i * input_dim + j] * input[j];
-            output[i] = activation_func(output[i]);
+        if (!activation.compare("sigmoid")) {
+            sigmoid(input);
         }
     }
 
@@ -78,14 +76,14 @@ class Layer {
         return input;
     }
 
-    //void init_weight_and_bias(vector<double> p, vector<double> q) {
-        //weight = p;
-        //bias = q;
-    //}
+    string get_act(void) {
+        return activation;
+    }
 
   private:
     vector<double> weight, bias, input, output;
     int input_dim, unit;
+    string activation;
 
     void random_init_1D_vec(vector<double>& vec, int len) {
         // 取隨機數的工具
@@ -99,8 +97,21 @@ class Layer {
         }
     }
 
-    double activation_func(double var) {
-        return 1 / (1 + exp(-var));
+    void sigmoid(vector<double> input) {
+        for (int i = 0; i < unit; i++) {
+            output[i] = -bias[i];
+            //cout << "Bias: " << bias[i] << endl;    // Debug
+            //cout << "Weight: ";
+            for (int j = 0; j < input_dim; j++) {
+                //Bug-20191126:
+                //選取 Weight ij, 1 <= i <= n, 1 <= j <= m 的公式爲 j * unit + i
+                //Bug-20191126: i, j 顛倒使 Weight 用錯
+                output[i] += weight[j * unit + i] * input[j];
+                //cout << weight[j * unit + i] << ", ";    //Debug
+            }
+            //cout << endl;    // Debug
+            output[i] = 1 / (1 + exp(-output[i]));
+        }
     }
 };
 
@@ -114,45 +125,11 @@ class Model {
         grad_bias.reserve(grad_bias.size() + 1);
         grad_bias.push_back(temp);
 
-        if (layers.empty() && layer.get_input_dim() > 0) {
-            // 以下課本範例數值
-            //vector<double> p;
-            //p.assign(4, 0.0);
-            //p[0] = 1;
-            //p[1] = -1;
-            //p[2] = -1;
-            //p[3] = 1;
-            //layer.set_weight(p);
-            //p.assign(2, 0.0);
-            //p[0] = 1;
-            //p[1] = 1;
-            //layer.set_bias(p);
-            // 以上課本範例數值
-
-            temp.assign(layer.get_unit() * layer.get_input_dim(), 0.0);
-            grad_weight.reserve(grad_weight.size() + 1);
-            grad_weight.push_back(temp);
-            
-            layers.push_back(layer);
-            return;
-        }
-
         layer.set_input_dim(layers.back().get_unit());
 
         temp.assign(layer.get_unit() * layer.get_input_dim(), 0.0);
         grad_weight.reserve(grad_weight.size() + 1);
         grad_weight.push_back(temp);
-
-        // 以下課本範例數值
-        //vector<double> pt;
-        //pt.assign(2, 0.0);
-        //pt[0] = 1;
-        //pt[1] = 1;
-        //layer.set_weight(pt);
-        //pt.assign(1, 0.0);
-        //pt[0] = 1;
-        //layer.set_bias(pt);
-        // 以上課本範例數值
 
         layers.push_back(layer);
     }
@@ -163,7 +140,7 @@ class Model {
         // 取隨機數的工具
         random_device rd;
         default_random_engine generator(rd());
-        uniform_real_distribution<double> unif(0.0, 10.0);
+        uniform_real_distribution<double> unif(-1.0, 1.0);
 
         for (
             list<Layer>::reverse_iterator it = layers.rbegin();
@@ -235,8 +212,8 @@ class Model {
 
     }
 
-    double fit(vector<vector<double>> x_train, vector<vector<double>> y_train, int epochs, int batch_size) {
-        learning_rate = 5;
+    double fit(vector<vector<double>> x_train, vector<vector<double>> y_train, int epochs, int batch_size, double lr) {
+        learning_rate = lr;
         init();
         //print();
 
@@ -245,12 +222,10 @@ class Model {
 
                 // 代入一筆 training data 訓練
                 vector<double> input = x_train[j];
-                /*
-                cout << "Input: ";
-                for (int k = 0; k < input.size(); k++)
-                    cout << input[k] << ", ";
-                cout << endl;
-                */
+                //cout << "Input: ";
+                //for (int k = 0; k < input.size(); k++)
+                    //cout << input[k] << ", ";
+                //cout << endl;
 
                 int l = 0;
                 for (list<Layer>::iterator it = layers.begin(); it != layers.end(); ++it) {
@@ -258,13 +233,11 @@ class Model {
                     it->set_input(input);
                     input = it->get_output();
 
-                    /*
-                    cout << "Output " << ++l << " : ";
-                    for (int index = 0; index < input.size(); index++) {
-                        cout << input[index] << ", ";
-                    }
-                    cout << "\n";
-                    */
+                    //cout << "Output " << ++l << " : ";
+                    //for (int index = 0; index < input.size(); index++) {
+                        //cout << input[index] << ", ";
+                    //}
+                    //cout << "\n";
                 }
                 //cout << "\n";
 
@@ -280,19 +253,23 @@ class Model {
                     if (rit == layers.rbegin()) {
                         for (int k = 0; k < rvit->size(); k++) {
                             rvit->at(k) = output[k] * (1 - output[k]) * (y_train[j][k] - output[k]);
-                            //cout << rvit->at(k) << " : "  << output[k] << " : " << y_train[j][k] << endl;
+                            //cout << "Delta: "
+                                 //<< rvit->at(k) << " : "  << output[k] << " : " << y_train[j][k] << endl;
                         }
                     } else {
                         for (int k = 0; k < rvit->size(); k++) {
+                            // 隱藏層間的 error = 
+                            // output_{i} * (1 - output_{i}) * (sum(weight_{ij} * error_{j}))
                             rvit->at(k) = output[k] * (1 - output[k]);
                             double temp = 0.0;
-                            int index = k;
-                            for (int l = 0; l < pre_error.size(); l++) {
-                                temp += pre_weight[index] * pre_error[l];
-                                index += pre_input_dim;
-                                //cout << pre_weight[l * pre_input_dim] << " : " << pre_error[l] << "!!!  \n\n";
+                            for (int l = 0; l < pre_unit; l++) {
+                                // weight_{ij} * error_{j}
+                                temp += pre_weight[k * pre_unit + l] * pre_error[l];
+                                //cout << "Pre_Weight: " << pre_weight[k * pre_unit + l] << endl;
                             }
                             rvit->at(k) *= temp;
+                            //cout << "Delta: "
+                                 //<< rvit->at(k) << " : "  << output[k] << endl;
                         }
                     }
 
@@ -308,17 +285,14 @@ class Model {
                 /*
                  * Debug：印出誤差值
                  */
-                /*
-                l = 0;
-                for (int i = 0; i < error.size(); i++) {
-                    cout << "Error " << ++l << " : ";
-                    for (int j = 0; j < error[i].size(); j++) {
-                        cout << error[i][j] << ", ";
-                    }
-                    cout << endl;
-                }
-                cout << endl;
-                */
+                //l = 0;
+                //for (int i = 0; i < error.size(); i++) {
+                    //cout << "Error " << ++l << " : ";
+                    //for (int j = 0; j < error[i].size(); j++) {
+                        //cout << error[i][j] << ", ";
+                    //}
+                    //cout << endl;
+                //}
 
                 // 計算修正量
                 rit = layers.rbegin();
@@ -327,12 +301,19 @@ class Model {
                 vector<vector<double>>::reverse_iterator rb = grad_bias.rbegin();
                 while (rit != layers.rend()) {
                     vector<double> vec_input = rit->get_input();
-                    for (int i = 0; i < rit->get_unit(); i++) {
-                        rb->at(i) += -learning_rate * rvit->at(i);
 
+                    for (int i = 0; i < rit->get_unit(); i++) {
+                        double bt = -learning_rate * rvit->at(i);
+                        rb->at(i) += bt;
+                        //cout << "DeltaB: " << bt << endl;
+
+                        //cout << "DeltaW: ";
                         for (int j = 0; j < rit->get_input_dim(); j++) {
-                            rw->at(i * rit->get_input_dim() + j) += learning_rate * rvit->at(i) * vec_input[j];
+                            double wt = learning_rate * rvit->at(i) * vec_input[j];
+                            rw->at(j * rit->get_unit() + i) += wt;
+                            //cout << wt << ", ";
                         }
+                        //cout << endl;
                     }
 
                     ++rit;
@@ -340,6 +321,7 @@ class Model {
                     ++rw;
                     ++rb;
                 }
+                //cout << endl;
 
                 /*
                  * Debug：印出 Gradient
@@ -390,12 +372,7 @@ class Model {
                 ++vwit;
                 ++vbit;
             }
-
-            //print();
-
-            //cout << "一次學習循環完成\n\n";
         }
-        //cout << endl;
         return loss_function(x_train, y_train);
     }
 
@@ -501,7 +478,7 @@ class Model {
             int current = 0;
             vector<double> result = layers.back().get_output();
             for (int c = 0; c < label[c].size(); c++) {
-                cout << result[c] << " : " << label[r][c] << endl;
+                //cout << result[c] << " : " << label[r][c] << endl;
                 //if (result[c] > 0.8) {
                     //result[c] = 1;
                 //} else if (result[c] < 0.2) {
@@ -594,12 +571,8 @@ int main(int argc, char *argv[]) {
      * 建構 Neural Network
      */
     Model model;
-    //model.add(Layer(2, 2));
-    //model.add(Layer(1));
-    model.add(Layer(3, 4));
-    //model.add(Layer(3));
-    //model.print();    // Debug: 印出各層的 weight
-    //model.compile(/*loss = 'E = (1/2) * sum_{j}(T_{j} - A_{j})^{2}, optimizer = 'BP'*/);
+    model.add(Layer(4, 4, "sigmoid"));
+    model.add(Layer(3, 4, "sigmoid"));
 
     /*
      * Training
@@ -608,9 +581,9 @@ int main(int argc, char *argv[]) {
     double max = -1;
     int times = 0;
     double acc;
-    for (int epochs = 1; epochs <= 100; epochs++) {
-        cout << epochs << endl;
-        acc = model.fit(training_data, target, epochs, batch_size);
+    for (int epochs = 600; epochs <= 700; epochs++) {
+        //cout << epochs << endl;
+        acc = model.fit(training_data, target, epochs, batch_size, 0.001);
         
         if (max < acc) {
             max = acc;
@@ -619,28 +592,27 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    //model.fit(training_data, target, times, batch_size);
-    //model.output_weight();
+    cout << max << "% : " << times << endl;
 
-    cout << max << " : " << times << endl;
+    //model.fit(training_data, target, 1, batch_size, 1);    // Debug
 
     /*
      * Testing
      */
-    int num_testing_data = 6;
-    vector<vector<double>> testing_data;
-    temp.assign(col-num_label, 0.0);
-    testing_data.assign(num_testing_data, temp);
-    temp.assign(num_label, 0.0);
-    target.assign(num_testing_data, temp);
+    //int num_testing_data = 30;
+    //vector<vector<double>> testing_data;
+    //temp.assign(col-num_label, 0.0);
+    //testing_data.assign(num_testing_data, temp);
+    //temp.assign(num_label, 0.0);
+    //target.assign(num_testing_data, temp);
 
-    string testing_data_name = "./testing_data/";
-    testing_data_name.append(argv[1]);
-    ifstream ftest(testing_data_name);
-    load_data_2D(ftest, target, testing_data, col, num_label, num_testing_data);
-    ftest.close();
+    //string testing_data_name = "./testing_data/";
+    //testing_data_name.append(argv[1]);
+    //ifstream ftest(testing_data_name);
+    //load_data_2D(ftest, target, testing_data, col, num_label, num_testing_data);
+    //ftest.close();
 
-    model.input_weight();
+    //model.input_weight();
 
-    model.test(testing_data, target);
+    //model.test(testing_data, target);
 }
